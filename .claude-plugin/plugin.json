@@ -1,0 +1,19 @@
+{
+  "name": "teams",
+  "version": "0.1.0",
+  "description": "Turn on a team of agents (a lead and specialists) with /team, with a live pane showing the plan, who is doing what, what needs you, and a log, plus guardrails on what helpers can do.",
+  "author": {
+    "name": "tylerhagy"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/tylerhagy/claude-teams",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "teamsDir": {
+      "type": "string",
+      "title": "Teams folder",
+      "description": "Folder holding one subfolder per team (team.md plus a members folder). Leave empty for ~/.claude/teams.",
+      "default": ""
+    }
+  }
+}

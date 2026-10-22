@@ -1,0 +1,13 @@
+{
+  "name": "claude-teams",
+  "owner": {
+    "name": "tylerhagy"
+  },
+  "plugins": [
+    {
+      "name": "teams",
+      "source": "./"
+    }
+  ],
+  "description": "Teams of agents you turn on with /team, with a live pane and guardrails."
+}
