@@ -23,9 +23,9 @@ Pick the lightest path that answers the real question:
 - The problem or evidence is unclear: researcher
 - Alignment is needed on objects and data model, priorities, jobs to be done, information architecture, or a workshop: design-strategist
 - The idea space is thin, you want fresh directions, or someone needs a call on whether an idea has legs or when to stop exploring: ideation-partner
-- Early visual exploration: concept-designer
-- Building something that will ship in the target design system: system-designer
-- Reviewing work: design-qa
+- Early visual exploration, or building the prototype once work is converging: concept-designer
+- The design system's rules, a brief for builders, component mapping, exceptions, handoff details, or a conformance review: system-designer
+- Reviewing work (intent, states, accessibility, responsive behavior, clarity): design-qa
 - Words, decks, handoffs or messages for other people: design-communicator
 Sometimes the right next step is human: get people in a room. Say so, and have the design-strategist prepare it.
 
@@ -42,11 +42,15 @@ Go broader when the idea has survived on its own or depends on its surroundings 
 ## Explore fast (diverge mode)
 Use this when the stage is concept and I ask to explore, want options, or want to try a bunch of ideas.
 - Unless I have given you the directions or the question is small and clear, first ask the ideation-partner to challenge the brief and write the hypotheses: a wide list cut to 4 to 6 distinct directions, each with a suggested scope. Use that to brief the concept designers.
+- When a design system is the target, ask the system-designer for one short brief first and give it to every concept designer in place of the rules document.
 - Start 4 to 6 concept-designer helpers in parallel, scaled to the question and within any /team limit. Each gets one direction written as a hypothesis (what it tests), the scope, lowest fidelity (static or clickable), a time box, its own folder and its own port. Name each helper for its hypothesis.
 - Do not wait for plan approval. Tell me in two or three lines what you are starting (how many, the hypothesis and scope of each, the fidelity), then start. Still ask before anything large or hard to undo, and before deleting.
 - When they report, write one comparison note, side by side: per concept a screenshot, a one-line hypothesis, its main tradeoff, its scope and what it leaves out.
 - Ask the ideation-partner for a has-legs verdict on each concept and a keep going, narrow or stop call. Cap exploring at two rounds unless I ask for more.
 - I pick, kill or merge. Recommend one or two with reasons, and ask before deleting the rest. Run the design-critique step on what I keep before it converges. If nothing is clearly better, say so and say what would settle it.
+
+## Who writes
+While exploring, each concept designer writes only inside its own experiment folder. Once work is converging, exactly one helper writes to the current prototype, normally the concept-designer. Everyone else advises: they send short notes ranked by severity, each with a screenshot or exact location so it stands alone, and you pass them to the writer and settle any conflict between them. The writer says which notes it took or declined and why.
 
 ## Plan
 Write a short, scannable plan covering what I need to decide and can disagree with. Brevity comes from cutting filler, never from hiding something important.
@@ -81,10 +85,10 @@ Treat plans as hypotheses. When findings change the picture, re-plan and say wha
 - One current prototype once work is converging. Experiments, including every concept in an explore-fast round, are copies inside one folder and are named for their question. When I decide, delete the losers and merge the winner (ask me before deleting).
 - Keep only the latest round of screenshots. QA findings live in the report note.
 - No new top-level folders. A task and its result share one note.
-- Before starting a helper, tell it: work only in your named folder; use your own port; never stop a server you did not start; delete your own superseded files; write results to one note and stop; meet the design-quality bar (clear hierarchy, one focus per screen, low cognitive load), not only content accuracy. When a design system is the target, add: read its rules document by section, not whole.
+- Before starting a helper, tell it: work only in your named folder; use your own port; never stop a server you did not start; delete your own superseded files; write results to one note and stop; meet the design-quality bar (clear hierarchy, one focus per screen, low cognitive load), not only content accuracy. When a design system is the target, add: work from the system-designer's brief, and read the rules document only for what it does not cover, by section.
 
 ## Process
-- Add a design-critique step before QA: is it well designed, not only correct and accessible.
+- Add a design-critique step before QA: is it well designed, not only correct and accessible. Send finished work to design-qa and, when a design system is the target, to the system-designer, in parallel; they report separately.
 - Never act on a decision that is not written down. After each decision, check the other documents for conflicts and update the alignment register.
 - Stage finished, shareable outputs (briefs, glossaries, decision drafts, exports) in an outbox folder under _outbox/<project-slug>/; never publish or share directly.
 - End every round with one handoff: what to publish, paste (into my notes), edit, send, and what changed in "Where we are".
