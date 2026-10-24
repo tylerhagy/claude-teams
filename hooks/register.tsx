@@ -15,6 +15,8 @@ const brief = atom({ plugin: 'teams', key: 'brief' } as const, '')
 const items = atom({ plugin: 'teams', key: 'items' } as const, [])
 const actions = atom({ plugin: 'teams', key: 'actions' } as const, [])
 const log = atom({ plugin: 'teams', key: 'log' } as const, [])
+// Which version of the lead's instructions the conversation already holds.
+const delivered = atom({ plugin: 'teams', key: 'delivered' } as const, '')
 const tab = atom({ plugin: 'teams', key: 'tab' } as const, 'work')
 
 type Member = {
@@ -24,7 +26,15 @@ type Member = {
   disallowedTools: string[]
   isNoCodeEdits: boolean
 }
-type Team = { name: string; lead: string; members: Member[] }
+type Team = {
+  name: string
+  lead: string
+  leadName: string
+  leadDescription: string
+  // rules for everyone, from shared.md next to team.md (optional)
+  shared: string
+  members: Member[]
+}
 type Color = 'green' | 'yellow' | 'red' | undefined
 
 // Limits a team's member files declare in their frontmatter:
@@ -99,6 +109,8 @@ const splitFrontmatter = (text: string) => {
   return { meta, body: text.slice(end + 5).replace(/^\n+/, '') }
 }
 
+const firstSentences = (text: string, n = 2) => text.trim().split(/(?<=[.!?])\s+/).slice(0, n).join(' ')
+
 const clock = (t: number) => new Date(t).toTimeString().slice(0, 5)
 
 let loaded: Team | null = null
@@ -115,7 +127,8 @@ const prefix = ($: { plugin: { name: string } }) => `${$.plugin.name}:`
 
 const loadTeam = async ($: any, name: string): Promise<Team> => {
   const dir = `${await teamsDir($)}/${name}`
-  const lead = splitFrontmatter(await $.fs.read(`${dir}/team.md`)).body
+  const leadFile = splitFrontmatter(await $.fs.read(`${dir}/team.md`))
+  const lead = leadFile.body
   const files = (await $.fs.list(`${dir}/members`)) as { name: string }[]
   const members: Member[] = []
   for (const file of files.filter(f => f.name.endsWith('.md'))) {
@@ -134,7 +147,15 @@ const loadTeam = async ($: any, name: string): Promise<Team> => {
       isNoCodeEdits: (meta.code_edits ?? '').toLowerCase() === 'no',
     })
   }
-  return { name, lead, members }
+  const shared = (await $.fs.exists(`${dir}/shared.md`)) ? ((await $.fs.read(`${dir}/shared.md`)) as string).trim() : ''
+  return {
+    name,
+    lead,
+    shared,
+    leadName: leadFile.meta.name ?? `${name}-lead`,
+    leadDescription: leadFile.meta.description ?? '',
+    members,
+  }
 }
 
 const registerMembers = async ($: any, team: Team) => {
@@ -142,7 +163,7 @@ const registerMembers = async ($: any, team: Team) => {
     await $.agent.register({
       name: member.name,
       description: member.description,
-      prompt: member.prompt,
+      prompt: team.shared === '' ? member.prompt : `${member.prompt.trimEnd()}\n\n${team.shared}`,
       disallowedTools: member.disallowedTools.length > 0 ? member.disallowedTools : undefined,
     })
   }
@@ -219,6 +240,7 @@ const turnOn = async ($: any, name: string): Promise<string> => {
   loaded = await loadTeam($, name)
   await registerMembers($, loaded)
   await update($, active, () => name)
+  await update($, delivered, () => '')
   await update($, rows, () => [])
   await restore($, name)
   await note($, `Team turned on: ${name}`)
@@ -231,6 +253,7 @@ const turnOn = async ($: any, name: string): Promise<string> => {
 const turnOff = async ($: any) => {
   await note($, 'Team turned off')
   await update($, active, () => null)
+  await update($, delivered, () => '')
   loaded = null
 }
 
@@ -244,6 +267,37 @@ const setLimitFromText = async ($: any, text: string) => {
   const word = text.trim().toLowerCase()
   if (/^[1-9]\d*$/.test(word)) return setLimit($, Number(word))
   if (word === '' || word === 'none' || word === 'off' || word === 'no limit') return setLimit($, null)
+}
+
+// What the lead is told when a team is on: its own file, how to delegate, and how to fill the pane.
+const leadText = async ($: any, team: Team): Promise<string> => {
+  const ids = team.members
+    .map(m => `${m.name} (subagent_type "${prefix($)}${m.name}")`)
+    .join(', ')
+  const max = await read($, limit)
+  return [
+    `The person turned on the "${team.name}" team with /team. For this conversation you are the lead described below.`,
+    `Delegate with the Agent tool to these specialists: ${ids}. Where the instructions name a specialist by id, use its subagent_type here.`,
+    max === null
+      ? 'The person has set no limit on how many specialists run at once, so ignore any helper limit written in the instructions below. They can set one with /team limit.'
+      : `The system allows at most ${max} specialists running at once, so ignore any other helper limit written in the instructions below. It may also ask the person before one starts.`,
+    'The person watches a team pane. Keep it current with the team_update tool (mcp__teams__team_update), without mentioning the tool in chat:',
+    '- brief: where things stand and what is being worked on now, two sentences or fewer, plain words.',
+    '- items: once a plan is approved, the plan as 3 to 8 plain-language things the team is digging into, each with a status (todo, doing, done, blocked) and the specialist working it. Send the whole list each time and update statuses as work moves.',
+    '- Items the person dropped (status dropped) stay dropped: leave them in the list and do not bring them back or work on them.',
+    '- addActions: anything the person must decide or do themselves (approvals, answers, things to paste or send), one short sentence each. Add one the moment you ask for it.',
+    '',
+    team.lead,
+    ...(team.shared === '' ? [] : ['', team.shared]),
+  ].join('\n')
+}
+
+const hashOf = (text: string) => {
+  let h = 5381
+  for (let i = 0; i < text.length; i += 1) {
+    h = ((h * 33) ^ text.charCodeAt(i)) >>> 0
+  }
+  return h.toString(36)
 }
 
 export const register: Register = (on, options) => {
@@ -319,33 +373,22 @@ export const register: Register = (on, options) => {
     return { text: await turnOn($, arg) }
   })
 
-  on('prompt.compose', async ($, e, next) => {
-    const out = await next(e)
+  // The lead's instructions ride beside the prompt as context (the person never sees it). They go once
+  // when a team is turned on, again if they change or after a compaction, not on every prompt.
+  on('prompt.submit', async ($, e, next) => {
+    if (e.command !== undefined) return next(e)
     const team = await current($)
-    if (team === null) return out
+    if (team === null) return next(e)
+    const text = await leadText($, team)
+    const stamp = `${team.name}:${hashOf(text)}`
+    if ((await read($, delivered)) === stamp) return next(e)
+    await update($, delivered, () => stamp)
+    return next({ ...e, context: [...(e.context ?? []), text] })
+  })
 
-    const ids = team.members
-      .map(m => `${m.name} (subagent_type "${prefix($)}${m.name}")`)
-      .join(', ')
-    const max = await read($, limit)
-    const text = [
-      `The person turned on the "${team.name}" team with /team. For this conversation you are the lead described below.`,
-      `Delegate with the Agent tool to these specialists: ${ids}. Where the instructions name a specialist by id, use its subagent_type here.`,
-      max === null
-        ? 'The person has set no limit on how many specialists run at once, so ignore any helper limit written in the instructions below. They can set one with /team limit.'
-        : `The system allows at most ${max} specialists running at once, so ignore any other helper limit written in the instructions below. It may also ask the person before one starts.`,
-      'The person watches a team pane. Keep it current with the team_update tool (mcp__teams__team_update), without mentioning the tool in chat:',
-      '- brief: where things stand and what is being worked on now, two sentences or fewer, plain words.',
-      '- items: once a plan is approved, the plan as 3 to 8 plain-language things the team is digging into, each with a status (todo, doing, done, blocked) and the specialist working it. Send the whole list each time and update statuses as work moves.',
-      '- Items the person dropped (status dropped) stay dropped: leave them in the list and do not bring them back or work on them.',
-      '- addActions: anything the person must decide or do themselves (approvals, answers, things to paste or send), one short sentence each. Add one the moment you ask for it.',
-      '',
-      team.lead,
-    ].join('\n')
-
-    return {
-      sections: [...out.sections, { id: 'teams:lead', text, scope: 'session' }],
-    }
+  on('session.compact', async ($, e, next) => {
+    if (e.trigger !== 'precompute') await update($, delivered, () => '')
+    return next(e)
   })
 
   on('agent.offer', async ($, e, next) => {
@@ -528,6 +571,7 @@ export const register: Register = (on, options) => {
     const todo = await read($, actions)
     const history = await read($, log)
     const view = await read($, tab)
+    const roster = team === null ? null : loaded?.name === team ? loaded : await current($)
     const root = await teamsDir($)
     const entries = (await $.fs.list(root).catch(() => [])) as { name: string; kind: string }[]
     const teamNames = entries.filter(entry => entry.kind === 'dir').map(entry => entry.name)
@@ -536,7 +580,7 @@ export const register: Register = (on, options) => {
     const working = agents.filter(r => r.status === 'running').length
     const tabs = [
       { key: 'work', label: 'Work' },
-      { key: 'agents', label: 'Agents' },
+      { key: 'agents', label: 'Team' },
       { key: 'actions', label: todo.length > 0 ? `Needs You (${todo.length})` : 'Needs You' },
       { key: 'log', label: 'Log' },
     ] as const
@@ -681,29 +725,75 @@ export const register: Register = (on, options) => {
               </Box>
             )}
 
-            {view === 'agents' && (
+            {view === 'agents' && roster !== null && (
               <Box flexDirection="column" gap={1}>
-                {agents.length === 0 && <Text dimColor>No helpers yet.</Text>}
-                {agents.slice(-spaced).map(row => (
-                  <Box key={`agent-${row.id}`} flexDirection="column">
-                    <Box>
-                      <Box width={2} flexShrink={0}>
-                        <Text color={row.status === 'done' ? 'green' : 'yellow'}>
-                          {row.status === 'done' ? '●' : '◐'}
-                        </Text>
-                      </Box>
-                      <Box flexGrow={1} flexShrink={1}>
-                        <Text wrap="wrap" dimColor={row.status === 'done'}>
-                          <Text bold>{row.role}</Text> · {row.task}
-                        </Text>
-                      </Box>
+                <Box flexDirection="column">
+                  <Box>
+                    <Box width={2} flexShrink={0}>
+                      <Text color="green">●</Text>
                     </Box>
-                    <Box paddingLeft={2}>
-                      <Text dimColor wrap="wrap">{row.note}</Text>
+                    <Box flexGrow={1} flexShrink={1}>
+                      <Text wrap="wrap">
+                        <Text bold>{roster.leadName}</Text>
+                        <Text dimColor> · lead · this session</Text>
+                      </Text>
                     </Box>
                   </Box>
-                ))}
-                {more(spaced, agents.length)}
+                  <Box paddingLeft={2} flexDirection="column">
+                    {roster.leadDescription !== '' && (
+                      <Text dimColor wrap="wrap">{firstSentences(roster.leadDescription)}</Text>
+                    )}
+                    {summary !== '' && <Text wrap="wrap">now: {summary}</Text>}
+                  </Box>
+                </Box>
+                <Box flexDirection="column" paddingLeft={2} gap={1}>
+                  {roster.members.map((m, i) => {
+                    const mine = agents.filter(r => r.role === m.name)
+                    const running = mine.filter(r => r.status === 'running')
+                    const last = [...mine].reverse().find(r => r.status === 'done')
+                    const planned = plan.filter(
+                      p => p.who === m.name && ['doing', 'blocked', 'todo'].includes(p.status),
+                    )
+                    const state = running.length > 0 ? 'working' : last !== undefined ? 'finished' : 'idle'
+                    return (
+                      <Box key={`member-${m.name}`} flexDirection="column">
+                        <Box>
+                          <Box flexShrink={0}>
+                            <Text dimColor>{i === roster.members.length - 1 ? '└─' : '├─'}</Text>
+                          </Box>
+                          <Box width={3} flexShrink={0} paddingLeft={1}>
+                            <Text color={state === 'working' ? 'yellow' : state === 'finished' ? 'green' : undefined} dimColor={state === 'idle'}>
+                              {state === 'working' ? '◐' : state === 'finished' ? '●' : '○'}
+                            </Text>
+                          </Box>
+                          <Box flexGrow={1} flexShrink={1}>
+                            <Text wrap="wrap">
+                              <Text bold>{m.name}</Text>
+                              <Text dimColor>
+                                {' · '}
+                                {state === 'working' && running.length > 1 ? `working (${running.length} runs)` : state}
+                              </Text>
+                            </Text>
+                          </Box>
+                        </Box>
+                        <Box paddingLeft={5} flexDirection="column">
+                          <Text dimColor wrap="wrap">{firstSentences(m.description)}</Text>
+                          {running.map(r => (
+                            <Text key={`on-${r.id}`} color="yellow" wrap="wrap">on: {r.task}</Text>
+                          ))}
+                          {running.length === 0 && last !== undefined && (
+                            <Text dimColor wrap="wrap">last: {last.task}</Text>
+                          )}
+                          {planned.map(p => (
+                            <Text key={`plan-${p.id}`} wrap="wrap" color={MARKS[p.status].color}>
+                              {MARKS[p.status].mark} {p.title}
+                            </Text>
+                          ))}
+                        </Box>
+                      </Box>
+                    )
+                  })}
+                </Box>
               </Box>
             )}
 

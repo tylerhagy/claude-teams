@@ -52,6 +52,7 @@ A team is a folder with a lead and a `members` folder:
 ```
 ~/.claude/teams/<team>/
   team.md              the lead's instructions
+  shared.md            rules for everyone (optional)
   members/<id>.md      one file per specialist
 ```
 
@@ -74,7 +75,8 @@ You are a Researcher. ...
 - `description` is what the lead sees when picking a specialist.
 - `disallowed_tools` (optional) lists tools the specialist may not call.
 - `code_edits: no` (optional) stops the specialist writing or editing code files (`.ts`, `.css`, `.html` and similar). It can still write notes.
-- The lead's file (`team.md`) is added to the session's system prompt while the team is on.
+- The lead's file (`team.md`) reaches the model as extra context beside your next prompt when the team is turned on, and again if it changes or after a compaction. It is never shown in the chat.
+- `shared.md` (optional) holds rules that apply to everyone, such as who the person is and what never to publish. It is added to the lead's instructions and to the end of every specialist's, so each rule is written once.
 
 The example files are the design team's instructions. They are written to be adapted: the intake questions, the routing table and the "never publish" rules are the parts to change for another kind of team.
 

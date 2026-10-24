@@ -24,6 +24,7 @@ declare module 'claude-code' {
       actions: Action[]
       log: LogLine[]
       tab: Tab
+      delivered: string
     }
   }
 }
